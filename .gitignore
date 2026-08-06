@@ -1,0 +1,4 @@
+.env
+__pycache__/
+*.png
+curr_screen.png
