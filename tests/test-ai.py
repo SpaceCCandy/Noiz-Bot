@@ -20,7 +20,7 @@ screenshot = pyautogui.screenshot()
 screenshot.save("curr_screen.png")
 img = Image.open("curr_screen.png")
 
-my_file = client.files.upload(file="curr_screen.png")
+my_file = client.files.upload(file="../curr_screen.png")
 
 prompt = """
 Analyze this screen capture. Classify the primary user activity into EXACTLY ONE of these 4 categories:

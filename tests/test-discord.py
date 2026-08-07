@@ -12,8 +12,8 @@ print("Successfully connected to Discord!")
 # 3. Push a status update
 # 'state' is the main line, 'details' is the second line
 RPC.update(
-    state="Something, or doing something",
-    details="Playing...",
+    state="Something, something?",
+    details="Testing...",
     #large_image="desktop"  # Optional image key
 )
 
