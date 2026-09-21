@@ -9,11 +9,18 @@ from datetime import datetime
 
 # Constants
 CLIENT_ID = '1534649774555271198'
-CAPTURE_DELAY = 120
+CAPTURE_DELAY = 120 # 2 mins
 IMG_CONTEXT = 3
 
 status = "idle"
 recent_screenshots = []
+# Every increase in 1 means 2 mins
+capTotal = 0
+gameCount = 0
+studyCount = 0
+doomCount = 0
+stemCount = 0
+meetingCount = 0
 
 #Getting examples
 EXAMPLES_CONFIG = [
@@ -68,9 +75,14 @@ Select EXACTLY ONE category key from the list below:
 [CATEGORY_KEY]: Short description explaining why this category was chosen based on the primary active window.
 """
 #- OUTPUT CONSTRAINTS: Respond with ONLY the exact category key name (e.g., STEM, GAMES, STUDY). Do NOT include category numbers, markdown formatting, explanations, or quotes.
+
+def summary():
+    return "games: " + gameCount*100/capTotal + "%" + "\nstudy: " + studyCount*100/capTotal + "\nDoom Scrolling: " + doomCount*100/capTotal + "\nstem: " + stemCount*100/capTotal + "\nMeeting: " + meetingCount*100/capTotal
+
 try:
     while True:
-        screenshot = pyautogui.screenshot()
+        screenshot = pyautogui.screenshot() # Takes the screenshot
+        capTotal += 1
         screenshot.save("curr_screen.png")
         img = Image.open("curr_screen.png")
         recent_screenshots.append(img) # Adding it to the recent stuff
@@ -88,20 +100,25 @@ try:
 
         if "STEM" in category_key:
             status = "doing STEM stuff ⭐"
+            stemCount += 1
         elif "GAMES" in category_key:
             status = "gaming 👾"
+            gameCount += 1
         elif "STUDY" in category_key:
             status = "studying 📖"
+            studyCount += 1
         elif "DOOM_SCROLLING" in category_key:
             status = "Doom Scrolling 💀"
+            doomCount += 1
         elif "MEETING" in category_key:
             status = "in a meeting 💻"
+            meetingCount += 1
         else:
             status = "idle 🌙"
         
         RPC.update(
         state=status,
-        details="Currently...",
+        details="(testing) Currently...",
         #large_image="desktop"  # Optional image key
         )  
 
@@ -119,4 +136,5 @@ try:
         #print("Response[" + interaction.output_text + "]")
 except KeyboardInterrupt:
     print("Closing connection...")
+    summary()
     RPC.close()
