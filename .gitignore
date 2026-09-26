@@ -2,3 +2,4 @@
 __pycache__/
 *.png
 curr_screen.png
+data.txt

@@ -1,11 +1,14 @@
 import os
 import pyautogui
 import time
-from pypresence import Presence
 from PIL import Image
+from pypresence import Presence
+import pystray
+from pystray import Menu as menu, MenuItem as item
 from dotenv import load_dotenv
 from google import genai
 from datetime import datetime
+import threading
 
 # Constants
 CLIENT_ID = '1534649774555271198'
@@ -13,21 +16,17 @@ CAPTURE_DELAY = 120 # 2 mins
 IMG_CONTEXT = 3
 
 status = "idle"
+is_running = True
 recent_screenshots = []
-# Every increase in 1 means 2 mins
-capTotal = 0
-gameCount = 0
-studyCount = 0
-doomCount = 0
-stemCount = 0
-meetingCount = 0
+image_path = "assets/Nozi-Bot.png"
+icon_image = Image.open(image_path)
 
 #Getting examples
 EXAMPLES_CONFIG = [
-    {"image": "Examples\Example1.png", "target": "[idle]: Not in meeting(No meeting indication on the bottom left profile, or a clear meeting window), the user is idle, and just casually texting with friends."},
-    {"image": "Examples\Example2.png", "target": "[Meeting]: The user is currently in a discord call indicated by the call window in discord, and a voice connecting pop up on the bottom left above the user profile."},
-    {"image": "Examples\Example3.png", "target": "[IDLE]: User is casually chatting on Discord. An embedded YouTube link card inside a chat thread does NOT count as DOOM_SCROLLING unless youtube.com or a fullscreen video player is active."},
-    {"image": "Examples\Example4.png", "target": "[STEM]: User is actively planning and designing program architecture in Canva for a software project. Planning software logic or system flow falls under STEM."}
+    {"image": "Examples\\Example1.png", "target": "[idle]: Not in meeting(No meeting indication on the bottom left profile, or a clear meeting window), the user is idle, and just casually texting with friends."},
+    {"image": "Examples\\Example2.png", "target": "[Meeting]: The user is currently in a discord call indicated by the call window in discord, and a voice connecting pop up on the bottom left above the user profile."},
+    {"image": "Examples\\Example3.png", "target": "[IDLE]: User is casually chatting on Discord. An embedded YouTube link card inside a chat thread does NOT count as DOOM_SCROLLING unless youtube.com or a fullscreen video player is active."},
+    {"image": "Examples\\Example4.png", "target": "[STEM]: User is actively planning and designing program architecture in Canva for a software project. Planning software logic or system flow falls under STEM."}
 ]
 
 few_shots = [
@@ -35,11 +34,6 @@ few_shots = [
     for example in EXAMPLES_CONFIG 
     for item in (Image.open(example["image"]), f"EXAMPLE RESPONSE -> {example['target']}")
 ]
-
-# Connecting to discord
-RPC = Presence(CLIENT_ID)
-RPC.connect()
-print("Successfully connected to Discord!")
 
 # Gets the secert Gemini API key
 load_dotenv()
@@ -76,65 +70,106 @@ Select EXACTLY ONE category key from the list below:
 """
 #- OUTPUT CONSTRAINTS: Respond with ONLY the exact category key name (e.g., STEM, GAMES, STUDY). Do NOT include category numbers, markdown formatting, explanations, or quotes.
 
-def summary():
-    return "games: " + gameCount*100/capTotal + "%" + "\nstudy: " + studyCount*100/capTotal + "\nDoom Scrolling: " + doomCount*100/capTotal + "\nstem: " + stemCount*100/capTotal + "\nMeeting: " + meetingCount*100/capTotal
+def on_quit(icon, item):
+    icon.stop()
+    print("> Program finished")
 
-try:
-    while True:
-        screenshot = pyautogui.screenshot() # Takes the screenshot
-        capTotal += 1
-        screenshot.save("curr_screen.png")
-        img = Image.open("curr_screen.png")
-        recent_screenshots.append(img) # Adding it to the recent stuff
+def init():
+    global RPC, capTotal, gameCount, studyCount, doomCount, stemCount, meetingCount
 
-        if len(recent_screenshots) > IMG_CONTEXT:
-            recent_screenshots.pop(0) # Get rid of last one
+    # Connecting to discord
+    RPC = Presence(CLIENT_ID)
+    RPC.connect()
+    print("> Successfully connected to Discord!")
 
-        response = client.models.generate_content(
-            model="gemini-3.5-flash-lite",
-            contents=[prompt, *few_shots, *recent_screenshots]
-        )
+    # Every increase in 1 means 2 mins
+    with open("data.txt") as f:
+        capTotal = int(f.readline().strip())
+        gameCount = int(f.readline().strip())
+        studyCount = int(f.readline().strip())
+        doomCount = int(f.readline().strip())
+        stemCount = int(f.readline().strip())
+        meetingCount = int(f.readline().strip())
 
-        ai_text = response.text
-        category_key = ai_text.split(":")[0].strip().replace("[", "").replace("]", "")
+def start_capture():
+    global RPC, capTotal, gameCount, studyCount, doomCount, stemCount, meetingCount, is_running
+    print("> Start capture")
 
-        if "STEM" in category_key:
-            status = "doing STEM stuff ⭐"
-            stemCount += 1
-        elif "GAMES" in category_key:
-            status = "gaming 👾"
-            gameCount += 1
-        elif "STUDY" in category_key:
-            status = "studying 📖"
-            studyCount += 1
-        elif "DOOM_SCROLLING" in category_key:
-            status = "Doom Scrolling 💀"
-            doomCount += 1
-        elif "MEETING" in category_key:
-            status = "in a meeting 💻"
-            meetingCount += 1
-        else:
-            status = "idle 🌙"
+    try:
+        while is_running:
+            screenshot = pyautogui.screenshot() # Takes the screenshot
+            capTotal += 1
+            screenshot.save("curr_screen.png")
+            img = Image.open("curr_screen.png")
+            recent_screenshots.append(img) # Adding it to the recent stuff
+
+            if len(recent_screenshots) > IMG_CONTEXT:
+                recent_screenshots.pop(0) # Get rid of last one
+
+            response = client.models.generate_content(
+                model="gemini-3.5-flash-lite",
+                contents=[prompt, *few_shots, *recent_screenshots]
+            )
+
+            ai_text = response.text
+            category_key = ai_text.split(":")[0].strip().replace("[", "").replace("]", "")
+
+            if "STEM" in category_key:
+                status = "doing STEM stuff ⭐"
+                stemCount += 1
+            elif "GAMES" in category_key:
+                status = "gaming 👾"
+                gameCount += 1
+            elif "STUDY" in category_key:
+                status = "studying 📖"
+                studyCount += 1
+            elif "DOOM_SCROLLING" in category_key:
+                status = "Doom Scrolling 💀"
+                doomCount += 1
+            elif "MEETING" in category_key:
+                status = "in a meeting 💻"
+                meetingCount += 1
+            else:
+                status = "idle 🌙"
+            
+            RPC.update(
+            state=status,
+            details="(testing) Currently...",
+            #large_image="desktop"  # Optional image key
+            )  
+
+            # Grab the exact current date and time
+            now = datetime.now()
+
+            # Format it nicely (Hours:Minutes:Seconds)
+            time_string = now.strftime("%H:%M:%S")  
+
+            print(f"Current Time: {time_string}")
+            print("Current status:" + status)
+            print("Response: " + ai_text)
+
+            time.sleep(CAPTURE_DELAY)
+            #print("Response[" + interaction.output_text + "]")
+    except KeyboardInterrupt:
+        print("> Closing connection...")
+        RPC.close()
         
-        RPC.update(
-        state=status,
-        details="(testing) Currently...",
-        #large_image="desktop"  # Optional image key
-        )  
-
-        # Grab the exact current date and time
-        now = datetime.now()
-
-        # Format it nicely (Hours:Minutes:Seconds)
-        time_string = now.strftime("%H:%M:%S")
-
-        print(f"Current Time: {time_string}")
-        print("Current status:" + status)
-        print("Response: " + ai_text)
-
-        time.sleep(CAPTURE_DELAY)
-        #print("Response[" + interaction.output_text + "]")
-except KeyboardInterrupt:
-    print("Closing connection...")
-    summary()
+def stop_capture():
+    global is_running
+    is_running = False
     RPC.close()
+    print("> RPC connection closed.")
+
+init()
+
+capture_thread = threading.Thread(target=start_capture)
+
+icon = pystray.Icon(
+    'Nozi-Bot',
+    icon=icon_image,
+    menu=pystray.Menu(pystray.MenuItem("Start", capture_thread.start),
+                      pystray.MenuItem("Stop", stop_capture),
+                      pystray.MenuItem("Exit", on_quit))
+    )
+
+icon.run()
