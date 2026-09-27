@@ -17,6 +17,7 @@ IMG_CONTEXT = 3
 
 status = "idle"
 is_running = True
+capturing = False
 recent_screenshots = []
 image_path = "assets/Nozi-Bot.png"
 icon_image = Image.open(image_path)
@@ -70,10 +71,6 @@ Select EXACTLY ONE category key from the list below:
 """
 #- OUTPUT CONSTRAINTS: Respond with ONLY the exact category key name (e.g., STEM, GAMES, STUDY). Do NOT include category numbers, markdown formatting, explanations, or quotes.
 
-def on_quit(icon, item):
-    icon.stop()
-    print("> Program finished")
-
 def init():
     global RPC, capTotal, gameCount, studyCount, doomCount, stemCount, meetingCount
 
@@ -92,19 +89,19 @@ def init():
         meetingCount = int(f.readline().strip())
 
 def start_capture():
-    global RPC, capTotal, gameCount, studyCount, doomCount, stemCount, meetingCount, is_running
+    global capTotal, gameCount, studyCount, doomCount, stemCount, meetingCount
     print("> Start capture")
 
     try:
-        while is_running:
-            screenshot = pyautogui.screenshot() # Takes the screenshot
+        while capturing:
+            screenshot = pyautogui.screenshot()  # Takes the screenshot
             capTotal += 1
             screenshot.save("curr_screen.png")
             img = Image.open("curr_screen.png")
-            recent_screenshots.append(img) # Adding it to the recent stuff
+            recent_screenshots.append(img)  # Adding it to the recent stuff
 
             if len(recent_screenshots) > IMG_CONTEXT:
-                recent_screenshots.pop(0) # Get rid of last one
+                recent_screenshots.pop(0)  # Get rid of oldest one
 
             response = client.models.generate_content(
                 model="gemini-3.5-flash-lite",
@@ -131,43 +128,67 @@ def start_capture():
                 meetingCount += 1
             else:
                 status = "idle 🌙"
-            
+
+            # If Stop was clicked while Gemini was thinking, don't overwrite the cleared status
+            if not capturing:
+                break
+
             RPC.update(
-            state=status,
-            details="(testing) Currently...",
-            #large_image="desktop"  # Optional image key
-            )  
+                state=status,
+                details="(testing) Currently...",
+            )
 
-            # Grab the exact current date and time
-            now = datetime.now()
-
-            # Format it nicely (Hours:Minutes:Seconds)
-            time_string = now.strftime("%H:%M:%S")  
-
+            time_string = datetime.now().strftime("%H:%M:%S")
             print(f"Current Time: {time_string}")
             print("Current status:" + status)
             print("Response: " + ai_text)
 
-            time.sleep(CAPTURE_DELAY)
-            #print("Response[" + interaction.output_text + "]")
-    except KeyboardInterrupt:
-        print("> Closing connection...")
-        RPC.close()
-        
+            # Sleep 1 second at a time so Stop takes effect quickly
+            for _ in range(CAPTURE_DELAY):
+                if not capturing:
+                    break
+                time.sleep(1)
+    except Exception as e:
+        print(f"> Capture error: {e}")
+
+capture_thread = None
+
+def start_cap():
+    global capturing, capture_thread
+    capturing = True
+    if capture_thread is None or not capture_thread.is_alive():
+        capture_thread = threading.Thread(target=start_capture, daemon=True)
+        capture_thread.start()
+
 def stop_capture():
-    global is_running
+    global capturing
+    capturing = False
+    RPC.clear()
+    print("> Status cleared.")
+
+def on_quit(icon, item):
+    global is_running, capturing
     is_running = False
+    capturing = False
+    icon.stop()
+
+    with open("data.txt", "w") as f:
+        f.write(str(capTotal) + "\n")
+        f.write(str(gameCount) + "\n")
+        f.write(str(studyCount) + "\n")
+        f.write(str(doomCount) + "\n")
+        f.write(str(stemCount) + "\n")
+        f.write(str(meetingCount) + "\n")
+
     RPC.close()
-    print("> RPC connection closed.")
+    print("> Program finished")
 
 init()
-
-capture_thread = threading.Thread(target=start_capture)
 
 icon = pystray.Icon(
     'Nozi-Bot',
     icon=icon_image,
-    menu=pystray.Menu(pystray.MenuItem("Start", capture_thread.start),
+    menu=pystray.Menu(pystray.MenuItem("Start", start_cap),
                       pystray.MenuItem("Stop", stop_capture),
                       pystray.MenuItem("Exit", on_quit))
     )
